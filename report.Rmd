@@ -1,0 +1,155 @@
+
+This file contains all the code used to filter the data and generate datasets that are read directly into the shiny app. The code for all visualizations is in the shiny app. 
+
+All visualizations in the report are from the shiny app.
+
+Code encompassing the whole project is available at: https://github.com/arjuniyer01/educate-to-success
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+
+```{r}
+ed_data <- read.csv("EdStatsData.csv")
+ed_data
+```
+
+
+```{r}
+hdi_data <- read.csv("HDI.csv")
+hdi_data
+```
+
+
+```{r}
+
+# Filtering the data to arrive at two indicator lists (one more restrictive than the other)
+# This helps us narrow down the indicators we want to select
+
+ed_data %>% 
+  select(-Country.Name, -Country.Code, -Indicator.Code, -c(X2015:X2100), -X) %>% 
+  rowwise() %>% 
+  mutate(na_count = sum(is.na(c_across(X1990:X2015)))) %>% 
+  select(Indicator.Name, na_count) %>% 
+  group_by(Indicator.Name) %>% 
+  summarise(sum_na_count = sum(na_count)) %>% 
+  arrange(sum_na_count) %>% 
+  right_join(read.csv("indicators_filtered.csv"), by = c("Indicator.Name" = "x"))  %>% 
+  filter(!grepl("Africa", Indicator.Name)) %>% 
+  filter(!grepl("Barro", Indicator.Name)) %>% 
+  filter(!grepl("LLECE", Indicator.Name)) %>% 
+  filter(!grepl("MICS", Indicator.Name)) %>% 
+  filter(!grepl("PASEC", Indicator.Name)) %>% 
+  filter(!grepl("PIAAC", Indicator.Name)) %>% 
+  filter(!grepl("PISA", Indicator.Name)) %>% 
+  filter(!grepl("PIRLS", Indicator.Name)) %>% 
+  filter(!grepl("SABER", Indicator.Name)) %>% 
+  filter(!grepl("SACMEQ", Indicator.Name)) %>% 
+  filter(!grepl("TIMSS", Indicator.Name)) %>% 
+  filter(!grepl("UIS", Indicator.Name)) %>% 
+  filter(!grepl("DHS", Indicator.Name)) %>% 
+  filter(!grepl("EGRA", Indicator.Name)) %>% 
+  filter(!grepl("Wittgenstein", Indicator.Name)) %>% 
+  filter(!grepl("(number)", Indicator.Name)) %>% 
+  filter(!grepl("male", Indicator.Name)) -> temp
+
+temp %>%
+  write.csv("indicator_list_w_nasum_v1.csv", row.names = F)
+
+temp %>%
+  filter(grepl("(%)|(headcount basis)", Indicator.Name)) %>%
+  write.csv("indicator_list_w_nasum_v2.csv", row.names = F)
+
+```
+
+
+```{r}
+# Indicators we are interested in are manually selected using a new column and exported to a final csv
+read.csv("indicator_list_final.csv") %>% 
+  filter(interested == 1) -> indicator_df_final
+```
+
+
+```{r}
+df <- setNames(data.frame(matrix(ncol = 1+nrow(indicator_df_final), nrow = 0)), c("Year", indicator_df_final$Indicator.Name))
+
+for(year in 1990:2015){
+  
+  ed_data %>% 
+    select(Indicator.Name, paste0("X", as.character(year)), Country.Name) %>% 
+    filter(Indicator.Name %in% indicator_df_final$Indicator.Name) %>%
+    select(Indicator.Name, paste0("X", as.character(year)), Country.Name) %>% 
+    pivot_wider(names_from = Indicator.Name, values_from = paste0("X", as.character(year))) -> temp
+  
+  hdi_data %>% 
+    select(Country,  paste0("X", as.character(year))) %>%
+    left_join(temp, by=c("Country" = "Country.Name")) %>%
+    select(-Country) -> df1
+  
+  cor_vec <- c()
+  for(indicator in indicator_df_final$Indicator.Name){
+          
+    if(sum(!is.na(df1[indicator])) < 4){
+      cor_vec <- c(cor_vec, paste0("0"))
+    }
+    else{
+      cor_vec <- c(cor_vec, paste0(
+        cor.test(as.vector(unlist(df1[indicator])), as.vector(unlist(df1[paste0("X", as.character(year))])))$estimate, " (",
+        cor.test(as.vector(unlist(df1[indicator])), as.vector(unlist(df1[paste0("X", as.character(year))])))$p.value,") "))
+    }
+    
+  }
+  
+  df[nrow(df) + 1, ] = c(paste0(as.character(year)), cor_vec)
+
+}
+
+# Average correlation calculation
+
+ed_data %>% 
+  select(Indicator.Name, c(X1990:X2015), Country.Name) %>% 
+  filter(Indicator.Name %in% indicator_df_final$Indicator.Name) %>% 
+  rowwise() %>% 
+  mutate(indicator_avg = mean(c_across(X1990:X2015), na.rm=T)) %>% 
+  select(Indicator.Name, indicator_avg, Country.Name) %>% 
+  pivot_wider(names_from = Indicator.Name, values_from = indicator_avg) -> temp
+
+hdi_data %>% 
+  select(Country,  c(X1990:X2015)) %>% 
+  rowwise() %>% 
+  mutate(hdi_avg = mean(c_across(X1990:X2015), na.rm=T)) %>% 
+  select(hdi_avg, Country) %>% 
+  left_join(temp, by=c("Country" = "Country.Name")) %>%
+  select(-Country) -> df1
+
+cor_vec <- c()
+for(indicator in indicator_df_final$Indicator.Name){
+        
+  if(sum(!is.na(df1[indicator])) < 10){
+    cor_vec <- c(cor_vec, 0)
+  }
+  else{
+    cor_vec <- c(cor_vec, paste0(
+      cor.test(as.vector(unlist(df1[indicator])), as.vector(unlist(df1["hdi_avg"])))$estimate, " (",
+      cor.test(as.vector(unlist(df1[indicator])), as.vector(unlist(df1["hdi_avg"])))$p.value, ") "))
+  }
+  
+}
+
+df[nrow(df) + 1, ] = c("averaged_columns", cor_vec)
+```
+
+
+```{r}
+# Shiny app data
+
+ed_data %>% 
+  filter(Indicator.Name %in% indicator_df_final$Indicator.Name) %>% 
+  write.csv("app-1/ed_data_filtered.csv", row.names = F)
+
+write.csv(df, "app-1/correlation_table.csv", row.names = F)
+
+```
