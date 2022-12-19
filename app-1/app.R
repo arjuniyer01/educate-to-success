@@ -77,7 +77,8 @@ ui <- shinyUI(navbarPage("Education Data",
                                 h4("Correlation table used for making observations"),
                                 h6("1) The table contains: Pearson correlation factor and the corresponding p-value in brackets."),
                                 h6("2) Averaged correlation is also measured by looking at the correlation between average HDI and average indicator value for each country between 1990-2015."),
-                                h6("3) The time frame has been limited to 1990-2015 since this is where the data exists for both education and HDI datasets.")
+                                h6("3) The time frame has been limited to 1990-2015 since this is where the data exists for both education and HDI datasets."),
+                                h6("4) Shows '0' when not enough datapoints available.")
                               ),
                               
                               # Main panel for displaying outputs ----
