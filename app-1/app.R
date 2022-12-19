@@ -1,7 +1,6 @@
 library(shiny)
 library(tidyverse)
 library(dplyr)
-library(shinydashboard)
 
 ed_data_filtered <- read.csv("ed_data_filtered.csv", header = T, sep = ",")
 hdi_data <- read.csv("HDI.csv")
